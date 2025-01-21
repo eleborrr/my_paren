@@ -24,7 +24,7 @@ evaluate :: SExpr -> SExpr
 
 evaluate (Number n) = Number n
 
-evaluate Nil = Nil
+-- evaluate Nil = Nil
 
 evaluate (Bool b) = Bool b
 
@@ -39,6 +39,34 @@ evaluate (If cond thenBranch elseBranch) =
         Bool True -> evaluate thenBranch
         Bool False -> evaluate elseBranch
         _ -> error "Condition must evaluate to boolean"
+
+evaluate Nil = Bool False    -- Если это Nil, возвращаем False (или любое другое значение по умолчанию)
+
+-- Main evaluate function
+evaluate (LogicBinary op firstBranch secondBranch) =
+    case op of
+        And -> Bool (exprToBool evaluatedFirst && exprToBool evaluatedSecond)
+        Or  -> Bool (exprToBool evaluatedFirst || exprToBool evaluatedSecond)
+        _ -> error "Unsupported logic operation"
+  where 
+    evaluatedFirst = evaluate firstBranch  -- Recursive call for the first operand
+    evaluatedSecond = evaluate secondBranch
+
+evaluate (LogicUnary op body) =
+    case op of
+        Not -> Bool (not (exprToBool evaluatedBody))  -- Handle Not with only one operand
+        _ -> error "Unsupported logic operation"
+  where 
+    evaluatedBody = evaluate body  -- Recursive call for the first operand
+
+-- evaluate (Logic op firstBranch ) =
+--     case op of
+--         Not -> case evaluatedFirst of
+--                     (Bool b) -> Bool (not b)
+--                     _ -> Bool False
+--         _ -> error "Unsupported logic operation"
+--     where 
+--         evaluatedFirst = evaluate firstBranch
 
 evaluate (ArithOp op args) = case op of
     '+' -> Number . sum $ map evaluateNumber args
@@ -59,6 +87,10 @@ evaluate (CompareOp op args) = case op of
     inOrder f (x:y:ys) = f x y && inOrder f (y:ys)
     inOrder _ _ = True
 evaluate _ = error "Unsupported expression type for evaluation"
+
+exprToBool :: SExpr -> Bool
+exprToBool (Bool False) = False
+exprToBool _            = True
 
 evaluateNumber :: SExpr -> Integer
 evaluateNumber (Number n) = n

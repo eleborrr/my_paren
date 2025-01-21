@@ -1,7 +1,6 @@
 module Helpers.Parser where
 
 import Helpers.Types
-import Data.Void (Void)
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import Control.Monad
@@ -11,6 +10,8 @@ expr :: Parser SExpr
 expr = L.space space1 empty comment *> choice
     [ try nil
     , try ifExpr
+    , try logicUnary
+    , try logicBinary
     , try number
     , try bool
     , try stringLiteral
@@ -97,6 +98,42 @@ quoteOp = do
     exprValue <- expr
     _ <- char ')'
     return $ Quote exprValue
+
+logicBinary :: Parser SExpr
+-- logic = do
+--     val <- logicOpParser
+--     return $ LogicOp val
+logicBinary = do
+    _ <- char '('
+    l <- logicOpParser
+    firstPart <- expr
+    secondPart <- expr
+    _ <- char ')'
+    return $ LogicBinary l firstPart secondPart
+
+logicUnary :: Parser SExpr
+logicUnary = do
+    _ <- char '('
+    l <- logicOpParser
+    body <- expr
+    _ <- char ')'
+    return $ LogicUnary l body
+
+logicOpParser :: Parser LogicOp
+logicOpParser = do
+    val <- choice [string "and", string "or", string "not"]
+    return $ logicOp val
+
+logicOp :: String -> LogicOp
+logicOp "and" = And
+logicOp "or" = Or
+logicOp "not" = Not
+
+
+logicOpToString :: LogicOp -> String
+logicOpToString And = "and"
+logicOpToString Or  = "or"
+logicOpToString Not = "not"
 
 quoteSugar :: Parser SExpr
 quoteSugar = do

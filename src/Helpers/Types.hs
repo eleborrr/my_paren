@@ -14,7 +14,11 @@ data SExpr = Atom String
         | ArithOp Char [SExpr]
         | CompareOp String [SExpr]
         | If SExpr SExpr SExpr 
+        | LogicBinary LogicOp SExpr SExpr
+        | LogicUnary LogicOp SExpr
         | Quote SExpr
         | Define String SExpr
         | Lambda [String] SExpr
         deriving (Eq, Show, Read)
+
+data LogicOp = And | Or | Not deriving (Show, Eq, Read)
