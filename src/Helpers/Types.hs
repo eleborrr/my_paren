@@ -22,3 +22,21 @@ data SExpr = Atom String
         deriving (Eq, Show, Read)
 
 data LogicOp = And | Or | Not deriving (Show, Eq, Read)
+
+symbolCharacters :: String
+symbolCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_!?-+*/%<>#"
+
+numberCharacters :: String
+numberCharacters = "0123456789."
+
+isSymbolCharacter :: Char -> Bool
+isSymbolCharacter ch = elem ch symbolCharacters
+
+isNumberCharacter :: Char -> Bool
+isNumberCharacter ch = elem ch numberCharacters
+
+isSymbol :: String -> Bool
+isSymbol = all isSymbolCharacter
+
+isNumber :: String -> Bool
+isNumber = all isNumberCharacter

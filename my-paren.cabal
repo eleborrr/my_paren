@@ -76,6 +76,8 @@ library
                     , async
                     , stm
                     , random
+                    , text 
+                    , containers
 
     -- Directories containing source files.
     hs-source-dirs:   src

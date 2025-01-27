@@ -100,11 +100,12 @@ test :: IO ()
 test = do
     let filename = "test.txt"
     content <- readFile filename  
-    let linesOfContent = lines content  
-    mapM_ processLine linesOfContent  
+    let linesOfContent = lines content   
+    mapM_ processLine linesOfContent
 
 processLine :: String -> IO ()
-processLine line =
+processLine line = do
+    print (tokenize line)
     case parse expr "" line of
         Left bundle -> putStrLn $ errorBundlePretty bundle 
         Right result -> print (evaluate result) 

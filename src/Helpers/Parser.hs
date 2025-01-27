@@ -6,6 +6,28 @@ import Text.Megaparsec.Char
 import Control.Monad
 import qualified Text.Megaparsec.Char.Lexer as L
 
+
+tokenize :: String -> [String]
+tokenize [] = []
+tokenize (x:xs)
+  | x == '(' = [x] : tokenize xs
+  | x == ')' = [x] : tokenize xs
+  | isNumberCharacter x = tokenizeNumber (x:xs) ""
+  | isSymbolCharacter x = tokenizeSymbol (x:xs) ""
+  | otherwise = tokenize xs
+
+tokenizeNumber :: String -> String -> [String]
+tokenizeNumber [] number = [number]
+tokenizeNumber (x:xs) number
+  | isNumberCharacter x = tokenizeNumber xs (number ++ [x])
+  | otherwise = number : tokenize (x:xs)
+
+tokenizeSymbol :: String -> String -> [String]
+tokenizeSymbol [] symbol = [symbol]
+tokenizeSymbol (x:xs) number
+  | isSymbolCharacter x = tokenizeSymbol xs (number ++ [x])
+  | otherwise = number : tokenize (x:xs)
+
 expr :: Parser SExpr
 expr = L.space space1 empty comment *> choice
     [ try nil
