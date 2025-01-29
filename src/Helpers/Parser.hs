@@ -1,11 +1,8 @@
 module Helpers.Parser where
 
+import Control.Applicative (Alternative(..))
 import Helpers.Types
-import Text.Megaparsec
-import Text.Megaparsec.Char
-import Control.Monad
-import qualified Text.Megaparsec.Char.Lexer as L
-
+import Debug.Trace
 
 tokenize :: String -> [String]
 tokenize [] = []
@@ -28,137 +25,214 @@ tokenizeSymbol (x:xs) number
   | isSymbolCharacter x = tokenizeSymbol xs (number ++ [x])
   | otherwise = number : tokenize (x:xs)
 
-expr :: Parser SExpr
-expr = L.space space1 empty comment *> choice
-    [ try nil
-    , try ifExpr
-    , try logicUnary
-    , try logicBinary
-    , try number
-    , try bool
-    , try stringLiteral
-    , try symbol
-    , try consCell
-    , try arithOp
-    , try compareOp
-    , try quoteSugar
-    , try quoteOp
-    , atom
-    ]
+-- Тип Parser
+newtype Parser a = Parser { runParser :: [String] -> Either String ([String], a) }
+
+-- Инстансы Functor, Applicative, Monad, Alternative
+instance Functor Parser where
+  fmap f (Parser p) = Parser $ \tokens -> case p tokens of
+    Left err -> Left err
+    Right (rest, a) -> Right (rest, f a)
+
+instance Applicative Parser where
+  pure a = Parser $ \tokens -> Right (tokens, a)
+  Parser pf <*> Parser pa = Parser $ \tokens -> case pf tokens of
+    Left e1 -> Left e1
+    Right (rest, f) -> case pa rest of
+      Left e2 -> Left e2
+      Right (rest2, a) -> Right (rest2, f a)
+
+instance Monad Parser where
+  return = pure
+  Parser p >>= f = Parser $ \tokens -> case p tokens of
+    Left err -> Left err
+    Right (rest, a) -> runParser (f a) rest
+
+instance Alternative Parser where
+  empty = Parser $ \_ -> Left "Empty"
+  Parser pa <|> Parser pb = Parser $ \tokens -> case pa tokens of
+    Left _ -> pb tokens
+    Right (rest, a) -> Right (rest, a)
+
+
+
+-- Парсер для SExpr
+parseSExpr :: Parser SExpr
+parseSExpr = -- trace "Entering parseSExpr" $
+  parseDefine <|> parseNumber <|> parseLambda <|> parseIf <|> parseQuote <|> parseQuoteSugar
+   <|> parseCompareOp <|> parseList <|> parseArithOp 
+   <|> parseBool <|> parseAnd <|> parseOr <|> parseNot <|> parseAtom
+
+
+parseQuote :: Parser SExpr
+parseQuote = do
+  token "quote"
+  expr <- parseSExpr
+  return $ Quote expr
+
+parseQuoteSugar :: Parser SExpr
+parseQuoteSugar = do
+  t <- atom
+  if head t == '\''
+    then do
+      let expr = tail t
+      return $ Quote (Atom expr)
+    else empty
+
+-- Базовые парсеры
+token :: String -> Parser String
+token expected = Parser $ \tokens -> 
+  case tokens of
+  (t:ts) | t == expected -> Right (ts, t)
+  _ -> Left $ "Expected token: " ++ expected
+
+atom :: Parser String
+atom = Parser $ \tokens -> case tokens of
+  (t:ts) -> if all isSymbolCharacter t
+              then Right (ts, t)    
+              else Left $ "Expected a symbol, but got: " ++ t
+  _ -> Left "Expected an atom"
 
 number :: Parser SExpr
-number = Number <$> L.decimal
-
-bool :: Parser SExpr
-bool = Bool <$> ((char '#' *> (char 't' *> pure True <|> char 'f' *> pure False)))
+number = Parser $ \tokens -> case tokens of
+  (t:ts) -> case reads t of
+    [(n, "")] -> Right (ts, Number n)
+    _ -> Left $ "Expected a number, but got: " ++ t
+  _ -> Left "Expected a number"
 
 stringLiteral :: Parser SExpr
-stringLiteral = StringLiteral <$> (char '"' *> manyTill L.charLiteral (char '"'))
+stringLiteral = Parser $ \tokens -> case tokens of
+  (t:ts) -> Right (ts, StringLiteral t)
+  _ -> Left "Expected a string literal"
 
-symbol :: Parser SExpr
-symbol = Atom . (:[]) <$> (char '#' *> L.charLiteral)
+-- Парсер для define
+parseDefine :: Parser SExpr
+parseDefine = do
+  token "define"
+  var <- atom
+  value <- parseSExpr
+  return $ Define var value
 
-consCell :: Parser SExpr
-consCell = do
-    _ <- char '('
-    x <- expr
-    _ <- space1 *> char '.' *> space1
-    y <- expr
-    _ <- char ')'
-    return $ Cons x y
+parseBool :: Parser SExpr
+parseBool = do
+  val <- atom
+  case val of
+    "#t" -> return $ Bool True
+    "#f" -> return $ Bool False
+    _    -> empty
 
-nil :: Parser SExpr
-nil = string "()" *> pure Nil
+parseAnd :: Parser SExpr
+parseAnd = do
+  token "and"
+  args <- many parseSExpr
+  return $ LogicBinary And args
 
-atom :: Parser SExpr
-atom = Atom <$> some (alphaNumChar <|> oneOf "!$%&*+-./:<=>?@^_~")
+parseOr :: Parser SExpr
+parseOr = do
+  token "or"
+  args <- many parseSExpr 
+  return $ LogicBinary Or args
 
-arithOp :: Parser SExpr
-arithOp = do
-    _ <- char '('
-    op <- oneOf "+-/*"
-    args <- many (space1 *> expr)
-    _ <- char ')'
-    return $ ArithOp op args
+parseNot :: Parser SExpr
+parseNot = do
+  token "not"
+  arg <- parseSExpr
+  return $ LogicUnary Not arg
 
-compareOp :: Parser SExpr
-compareOp = do
-    _ <- char '('
-    op <- choice [string "=", string "<", string ">", string "<=", string ">="]
-    args <- many (space1 *> expr)
-    _ <- space
-    _ <- char ')'
-    return $ CompareOp op args
+-- Парсер для числа
+parseNumber :: Parser SExpr
+parseNumber = Parser $ \tokens -> case tokens of
+  (t:ts) -> case reads t of
+    [(n, "")] -> trace ("Parsed number: " ++ show n) $ Right (ts, Number n)
+    _ -> Left $ "Expected a number, but got: " ++ t
+  _ -> Left "Expected a number"
 
-comment :: Parser ()
-comment = L.skipLineComment ";"
+-- Парсер для лямбда-выражений
+parseLambda :: Parser SExpr
+parseLambda = do
+  token "lambda"
+  -- trace "Parsing lambda" $ pure ()
+  params <- parseParams
+  -- -- trace ("Parsed params: " ++ show params) $ pure ()
+  body <- parseSExpr
+  -- trace ("Parsed body: " ++ show body) $ pure ()
+  pure (Lambda params body)
 
-scn :: Parser ()
-scn = L.space space1 comment empty
+-- Парсер для списка параметров
+parseParams :: Parser [String]
+parseParams = do
+  token "("
+  -- trace "Parsing params" $ pure ()
+  params <- many atom
+  -- trace ("Parsed params " ++ show params) $ pure ()
+  token ")"
+  return params
 
-sc :: Parser ()
-sc = L.space (void $ takeWhile1P Nothing f) comment empty
-  where
-    f x = x == ' ' || x == '\t'
+-- Парсер для атома
+parseAtom :: Parser SExpr
+parseAtom = Atom <$> atom
 
-lexeme :: Parser a -> Parser a
-lexeme = L.lexeme sc
+parseList :: Parser SExpr
+parseList = do
+  token "("
+  expr <- parseSExpr
+  rest <- parseListTail
+  return $ case rest of
+    Nil -> expr  -- Если хвост пустой, возвращаем только голову
+    _ -> Cons expr rest 
 
-ifExpr :: Parser SExpr
-ifExpr = do
-    _ <- string "(if"
-    cond <- space1 *> expr
-    thenBranch <- space1 *> expr
-    elseBranch <- space1 *> expr
-    _ <- char ')'
-    return $ If cond thenBranch elseBranch
+-- Парсер для хвоста списка
+parseListTail :: Parser SExpr
+parseListTail = do
+  (token ")" *> pure Nil) <|> do
+    hd <- parseSExpr
+    tl <- parseListTail
+    pure $ Cons hd tl
 
-quoteOp :: Parser SExpr
-quoteOp = do
-    _ <- string "(quote"
-    space1
-    exprValue <- expr
-    _ <- char ')'
-    return $ Quote exprValue
+-- Парсер для арифметических операций
+parseArithOp :: Parser SExpr
+parseArithOp = do
+  op <- atom
+  if op `elem` ["+", "-", "*", "/"]
+    then do
+      -- trace "Parsing arith op" $ pure ()
+      args <- many parseSExpr
+      trace ("Parsed arithmetic operation: op = " ++ show op ++ ", args = " ++ show args) $ pure (ArithOp (head op) args)
+    else empty
 
-logicBinary :: Parser SExpr
--- logic = do
---     val <- logicOpParser
---     return $ LogicOp val
-logicBinary = do
-    _ <- char '('
-    l <- logicOpParser
-    firstPart <- expr
-    secondPart <- expr
-    _ <- char ')'
-    return $ LogicBinary l firstPart secondPart
+parseCompareOp :: Parser SExpr
+parseCompareOp = do
+  op <- atom
+  if op `elem` ["<", ">", "<=", ">=", "==", "!="]
+    then do
+      args <- many parseSExpr
+      return $ CompareOp op args
+    else empty
 
-logicUnary :: Parser SExpr
-logicUnary = do
-    _ <- char '('
-    l <- logicOpParser
-    body <- expr
-    _ <- char ')'
-    return $ LogicUnary l body
+parseIf :: Parser SExpr
+parseIf = do
+  token "if"
+  -- trace "Parsing if" $ pure ()
+  condition <- parseSExpr
+  -- trace ("Parsed condition: " ++ show condition ) $ pure ()
+  thenBranch <- parseSExpr
+  elseBranch <- parseSExpr
+  return $ If condition thenBranch elseBranch
 
-logicOpParser :: Parser LogicOp
-logicOpParser = do
-    val <- choice [string "and", string "or", string "not"]
-    return $ logicOp val
-
-logicOp :: String -> LogicOp
-logicOp "and" = And
-logicOp "or" = Or
-logicOp "not" = Not
-
-
-logicOpToString :: LogicOp -> String
-logicOpToString And = "and"
-logicOpToString Or  = "or"
-logicOpToString Not = "not"
-
-quoteSugar :: Parser SExpr
-quoteSugar = do
-    _ <- char '\''
-    exprValue <- expr
-    return $ Quote exprValue
+-- Пример использования
+main :: IO ()
+main = do
+  -- let input = ["if", "(", "<", "1", "2", ")", "aaa", "bbb"]
+  -- let input = ["lambda", "(", "x", "y", ")", "(", "+", "x", "y", ")"]
+  -- let input = ["(", "and" , "#f", "#t", ")"]
+  -- let input = ["or", "#f", "(", "<", "1", "2", ")", "aaa"]
+  -- let input = ["'smth"]
+  -- let input = ["(", "define", "x", "10", ")"]
+  -- let input = ["define", "y", "(", "+", "1", "2", ")"]
+  -- let input = ["()", "y", "(", "+", "1", "2", ")"]
+  let input = ["(", "+", "a", "b", ")"]
+  case runParser parseSExpr input of
+    Left err -> putStrLn $ "Error: " ++ err
+    Right (rest, expr) -> do
+      print expr
+      print rest

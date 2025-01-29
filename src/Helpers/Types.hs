@@ -1,10 +1,5 @@
 module Helpers.Types where
 
-import Data.Void (Void)
-import Text.Megaparsec
-
-type Parser = Parsec Void String
-
 data SExpr = Atom String
         | Number Integer
         | StringLiteral String
@@ -14,7 +9,7 @@ data SExpr = Atom String
         | ArithOp Char [SExpr]
         | CompareOp String [SExpr]
         | If SExpr SExpr SExpr 
-        | LogicBinary LogicOp SExpr SExpr
+        | LogicBinary LogicOp [SExpr]
         | LogicUnary LogicOp SExpr
         | Quote SExpr
         | Define String SExpr
@@ -24,7 +19,7 @@ data SExpr = Atom String
 data LogicOp = And | Or | Not deriving (Show, Eq, Read)
 
 symbolCharacters :: String
-symbolCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_!?-+*/%<>#"
+symbolCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_!?-+*/%<>#'"
 
 numberCharacters :: String
 numberCharacters = "0123456789."

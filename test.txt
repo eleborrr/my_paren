@@ -1,3 +1,2 @@
-(and (or #t #f) (not (+ 2 2)))
-
-(and 5 6)
+(define a (+ 2 2))
+(+ x a)
