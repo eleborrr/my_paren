@@ -13,6 +13,7 @@ data SExpr = Atom String
         | LogicUnary LogicOp SExpr
         | Quote SExpr
         | Define String SExpr
+        | Var String SExpr
         | Lambda [String] SExpr
         deriving (Eq, Show, Read)
 

@@ -1,2 +1,4 @@
-(define a (+ 2 2))
+(define a 30)
+(set! a 29)
+(set! x 2)
 (+ x a)

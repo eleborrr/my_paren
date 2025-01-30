@@ -59,7 +59,7 @@ instance Alternative Parser where
 -- Парсер для SExpr
 parseSExpr :: Parser SExpr
 parseSExpr = -- trace "Entering parseSExpr" $
-  parseDefine <|> parseNumber <|> parseLambda <|> parseIf <|> parseQuote <|> parseQuoteSugar
+  parseDefine <|> parseSetVar <|> parseNumber <|> parseLambda <|> parseIf <|> parseQuote <|> parseQuoteSugar
    <|> parseCompareOp <|> parseList <|> parseArithOp 
    <|> parseBool <|> parseAnd <|> parseOr <|> parseNot <|> parseAtom
 
@@ -112,6 +112,14 @@ parseDefine = do
   var <- atom
   value <- parseSExpr
   return $ Define var value
+
+-- Парсер для работы с переменными
+parseSetVar :: Parser SExpr
+parseSetVar = do
+  token "set!"
+  var <- atom
+  value <- parseSExpr
+  return $ Var var value
 
 parseBool :: Parser SExpr
 parseBool = do

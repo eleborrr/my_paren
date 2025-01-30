@@ -49,7 +49,7 @@ eval env (ArithOp op args) = trace ("Evaluating ArithOp: " ++ [op]) $
     applyArithOp '-' = foldl1 (-)
     applyArithOp '*' = product
     applyArithOp '/' = foldl1 div
-    
+
 eval env (CompareOp op args) = trace ("Evaluating CompareOp: " ++ op) $
     let evalArgs = Prelude.map (eval env) args
         _ = trace ("Evaluated arguments: " ++ show evalArgs) ()
@@ -107,7 +107,13 @@ eval env (Define var expr) = trace ("Evaluating Define: " ++ var) $
         newEnv = env { globals = M.insert var val (globals env1) }
         _ = trace ("Inserted VAL: " ++ show val) ()
 
-    in (val, newEnv) 
+    in (val, newEnv)
+
+eval env (Var var expr) = trace ("Evaluating Var: " ++ var) $
+    let (result, newEnv) = eval env expr
+        updatedGlobals = M.insert var result (globals env)
+        updatedEnv = newEnv {globals = updatedGlobals}
+    in (result, updatedEnv)
 
 eval env (Lambda params body) = trace ("Evaluating Lambda: " ++ show params) $ (Lambda params body, env)
 
@@ -117,9 +123,9 @@ test :: IO ()
 test = do
     let initialEnv = env
     let filename = "test.txt"
-    content <- readFile filename  
-    let linesOfContent = lines content  
-    finalEnv <- foldM processLine initialEnv linesOfContent 
+    content <- readFile filename
+    let linesOfContent = lines content
+    finalEnv <- foldM processLine initialEnv linesOfContent
     putStrLn $ "Final environment: " ++ show finalEnv
 
 processLine :: Env -> String -> IO Env
