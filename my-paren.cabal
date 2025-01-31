@@ -140,4 +140,5 @@ test-suite my-paren-test
         tasty-hunit,
         HUnit ^>=1.6,
         tasty-hedgehog,
-        hedgehog ^>=1.5
+        hedgehog ^>=1.5,
+        containers

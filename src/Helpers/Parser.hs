@@ -127,17 +127,17 @@ parseSetVar = do
 
 parseStringLiteral :: Parser SExpr
 parseStringLiteral = do
-  -- trace "--trying to parse StringLiteral" $ pure()
-  t <- atom
-  -- trace ("Parsing string literal: " ++ t) $ pure ()
-  if (head t == '\"' || head t == '"') && (last t == '\"' || last t == '"')
+  t <- Parser $ \tokens -> case tokens of
+    (t:ts) -> Right (ts, t) 
+    _ -> Left "Expected a string literal"
+
+  if not (null t) && head t == '\"' && last t == '\"'
     then do
       let content = init (tail t)
       let unescapedContent = unescapeString content
-      -- trace ("unescapedContent: " ++ show unescapedContent) $ pure ()
       return $ StringLiteral unescapedContent
-    else do 
-      empty
+    else
+      empty 
 
 unescapeString :: String -> String
 unescapeString [] = []
