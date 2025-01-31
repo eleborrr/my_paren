@@ -4,6 +4,9 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Helpers.Parser
 import Helpers.Types
+
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 import MyLib
 
 tests :: TestTree
@@ -35,26 +38,26 @@ parserTests = testGroup "Parser Tests"
 evalTests :: TestTree
 evalTests = testGroup "Eval Tests"
   [ testCase "Eval number" $
-      eval env (Number 42) @?= (Number 42, env)
+      eval initialEnv (Number 42) @?= (Number 42, initialEnv)
   , testCase "Eval string literal" $
-      eval env (StringLiteral "hello") @?= (StringLiteral "hello", env)
+      eval initialEnv (StringLiteral "hello") @?= (StringLiteral "hello", initialEnv)
   , testCase "Eval boolean true" $
-      eval env (Bool True) @?= (Bool True, env)
+      eval initialEnv (Bool True) @?= (Bool True, initialEnv)
   , testCase "Eval boolean false" $
-      eval env (Bool False) @?= (Bool False, env)
+      eval initialEnv (Bool False) @?= (Bool False, initialEnv)
   , testCase "Eval arithmetic operation" $
-      eval env (ArithOp '+' [Number 1, Number 2]) @?= (Number 3, env)
+      eval initialEnv (ArithOp '+' [Number 1, Number 2]) @?= (Number 3, initialEnv)
   , testCase "Eval variable" $
-      eval env (Atom "x") @?= (Number 10, env)
+      eval initialEnv (Atom "x") @?= (Number 10, initialEnv)
   , testCase "Eval define expression" $
-      let (_, newEnv) = eval env (Define "z" (Number 5))
+      let (_, newEnv) = eval initialEnv (Define "z" (Number 5))
       in eval newEnv (Atom "z") @?= (Number 5, newEnv)
   , testCase "Eval if expression (true branch)" $
-      eval env (If (Bool True) (Number 1) (Number 2)) @?= (Number 1, env)
+      eval initialEnv (If (Bool True) (Number 1) (Number 2)) @?= (Number 1, initialEnv)
   , testCase "Eval if expression (false branch)" $
-      eval env (If (Bool False) (Number 1) (Number 2)) @?= (Number 2, env)
+      eval initialEnv (If (Bool False) (Number 1) (Number 2)) @?= (Number 2, initialEnv)
   , testCase "Eval lambda expression" $
-      eval env (Lambda ["x"] (ArithOp '+' [Atom "x", Number 1])) @?= (Lambda ["x"] (ArithOp '+' [Atom "x", Number 1]), env)
+      eval initialEnv (Lambda ["x"] (ArithOp '+' [Atom "x", Number 1])) @?= (Lambda ["x"] (ArithOp '+' [Atom "x", Number 1]), initialEnv)
   ]
 
 main :: IO ()

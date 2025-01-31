@@ -9,7 +9,7 @@ import Data.Char (toLower)
 data Env = Env
         {
             globals :: M.Map String SExpr
-        } deriving Show
+        } deriving (Show, Eq)
 
 initialEnv :: Env
 initialEnv = Env { globals = M.fromList [("x", Number 10), ("y", Number 20)] }
