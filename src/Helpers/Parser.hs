@@ -9,9 +9,16 @@ tokenize [] = []
 tokenize (x:xs)
   | x == '(' = [x] : tokenize xs
   | x == ')' = [x] : tokenize xs
+  -- | x == '\'' = handleQuote xs
   | isNumberCharacter x = tokenizeNumber (x:xs) ""
   | isSymbolCharacter x = tokenizeSymbol (x:xs) ""
   | otherwise = tokenize xs
+
+handleQuote :: String -> [String]
+handleQuote xs =
+  case xs of
+    '(':rest -> "'(" : tokenize rest
+    _ -> "'" : tokenize xs
 
 tokenizeNumber :: String -> String -> [String]
 tokenizeNumber [] number = [number]
@@ -60,9 +67,13 @@ instance Alternative Parser where
 parseSExpr :: Parser SExpr
 parseSExpr = -- trace "Entering parseSExpr" $
   parseDefine <|> parseSetVar <|> parseNumber <|> parseLambda <|> parseIf <|> parseQuote <|> parseQuoteSugar
-   <|> parseCompareOp <|> parseList <|> parseArithOp 
-   <|> parseBool <|> parseAnd <|> parseOr <|> parseNot <|> parseAtom
-
+  <|> parseCompareOp <|> parseList <|> parseArithOp 
+  <|> parseBool <|> parseAnd <|> parseOr <|> parseNot
+  <|> parseStringCheck <|> parseStringLength 
+  <|> parseStringEqual <|> parseSubstring <|> parseStringAppend
+  <|> parseStringLiteral
+  <|> parseCadrLike 
+  <|> parseAtom
 
 parseQuote :: Parser SExpr
 parseQuote = do
@@ -72,12 +83,10 @@ parseQuote = do
 
 parseQuoteSugar :: Parser SExpr
 parseQuoteSugar = do
-  t <- atom
-  if head t == '\''
-    then do
-      let expr = tail t
-      return $ Quote (Atom expr)
-    else empty
+  token "'"
+  expr <- parseSExpr
+  -- trace ("[PARSER] Quote Sugar entered with: " ++ show expr) $ pure ()
+  return $ Quote expr
 
 -- Базовые парсеры
 token :: String -> Parser String
@@ -100,11 +109,6 @@ number = Parser $ \tokens -> case tokens of
     _ -> Left $ "Expected a number, but got: " ++ t
   _ -> Left "Expected a number"
 
-stringLiteral :: Parser SExpr
-stringLiteral = Parser $ \tokens -> case tokens of
-  (t:ts) -> Right (ts, StringLiteral t)
-  _ -> Left "Expected a string literal"
-
 -- Парсер для define
 parseDefine :: Parser SExpr
 parseDefine = do
@@ -120,6 +124,92 @@ parseSetVar = do
   var <- atom
   value <- parseSExpr
   return $ Var var value
+
+parseStringLiteral :: Parser SExpr
+parseStringLiteral = do
+  -- trace "--trying to parse StringLiteral" $ pure()
+  t <- atom
+  -- trace ("Parsing string literal: " ++ t) $ pure ()
+  if (head t == '\"' || head t == '"') && (last t == '\"' || last t == '"')
+    then do
+      let content = init (tail t)
+      let unescapedContent = unescapeString content
+      -- trace ("unescapedContent: " ++ show unescapedContent) $ pure ()
+      return $ StringLiteral unescapedContent
+    else do 
+      empty
+
+unescapeString :: String -> String
+unescapeString [] = []
+unescapeString ('\\':'"':xs) = '"' : unescapeString xs
+unescapeString ('\\':'\\':xs) = '\\' : unescapeString xs
+unescapeString (x:xs) = x : unescapeString xs 
+
+parseStringCheck :: Parser SExpr
+parseStringCheck = do
+  token "string?"
+  trace "string check parsed" $ pure()
+  arg <- parseSExpr
+  return $ StringCheck arg
+
+parseStringLength :: Parser SExpr
+parseStringLength = do
+  token "string-length"
+  arg <- parseSExpr
+  return $ StringLength arg
+
+parseStringEqual :: Parser SExpr
+parseStringEqual = do
+  token "string=?"
+  -- trace "[PARSER] parsed STRING EQUAL" $ pure()
+  arg1 <- parseSExpr
+  arg2 <- parseSExpr
+  return $ StringEqual arg1 arg2
+
+parseSubstring :: Parser SExpr
+parseSubstring = do
+  token "substring"
+  str <- parseSExpr
+  start <- parseSExpr
+  end <- parseSExpr
+  return $ Substring str start end
+
+parseStringAppend :: Parser SExpr
+parseStringAppend = do
+  token "string-append"
+  -- trace "string-append parsing args" $ pure()
+  args <- many parseSExpr 
+  trace ("args parsed: " ++ show args) $ pure ()
+  return $ StringAppend args
+
+car :: SExpr -> SExpr
+car (Cons x _) = x
+car _ = error "car: expected a non-empty list"
+
+cdr :: SExpr -> SExpr
+cdr (Cons _ xs) = xs
+cdr _ = error "cdr: expected a non-empty list"
+
+parseCadrLike :: Parser SExpr
+parseCadrLike = do
+  funcName <- atom
+  if isCadrLike funcName
+    then do
+      arg <- parseSExpr
+      let expr = buildCadrExpr funcName arg
+      return expr
+    else empty
+  where
+    isCadrLike :: String -> Bool
+    isCadrLike name =
+      length name >= 3 &&
+      head name == 'c' &&
+      last name == 'r' && 
+      all (`elem` "ad") (init (tail name))
+
+    buildCadrExpr :: String -> SExpr -> SExpr
+    buildCadrExpr name arg =
+      foldr (\ch acc -> if ch == 'a' then Car acc else Cdr acc) arg (reverse $ init (tail name))
 
 parseBool :: Parser SExpr
 parseBool = do
@@ -183,10 +273,12 @@ parseAtom = Atom <$> atom
 parseList :: Parser SExpr
 parseList = do
   token "("
+  trace "parsing List" $ pure ()
   expr <- parseSExpr
+  trace ("List parsed: " ++ show expr) $ pure ()
   rest <- parseListTail
   return $ case rest of
-    Nil -> expr  -- Если хвост пустой, возвращаем только голову
+    Nil -> expr
     _ -> Cons expr rest 
 
 -- Парсер для хвоста списка
@@ -238,7 +330,12 @@ main = do
   -- let input = ["(", "define", "x", "10", ")"]
   -- let input = ["define", "y", "(", "+", "1", "2", ")"]
   -- let input = ["()", "y", "(", "+", "1", "2", ")"]
-  let input = ["(", "+", "a", "b", ")"]
+  -- let input = ["(", "+", "a", "b", ")"]
+  -- let input = ["(", "string-append", "\"hello\"" , "\" world\"", ")"]
+  -- let input = ["(", "string-append", "\" world\"", ")"]
+  -- let input = ["\" world\""]
+  let input = ["()"]
+  print input
   case runParser parseSExpr input of
     Left err -> putStrLn $ "Error: " ++ err
     Right (rest, expr) -> do

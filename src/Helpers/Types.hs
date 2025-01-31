@@ -15,12 +15,20 @@ data SExpr = Atom String
         | Define String SExpr
         | Var String SExpr
         | Lambda [String] SExpr
-        deriving (Eq, Show, Read)
+        | StringCheck SExpr
+        | StringLength SExpr
+        | StringEqual SExpr SExpr
+        | Substring SExpr SExpr SExpr
+        | StringAppend [SExpr]  
+        | Car SExpr
+        | Cdr SExpr 
+        deriving (Eq, Show, Read) 
 
 data LogicOp = And | Or | Not deriving (Show, Eq, Read)
 
+
 symbolCharacters :: String
-symbolCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_!?-+*/%<>#'"
+symbolCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_!?-+*/%<>#'\"\\="
 
 numberCharacters :: String
 numberCharacters = "0123456789."
